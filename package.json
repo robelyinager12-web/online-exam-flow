@@ -10,6 +10,9 @@
     "build:backend": "npm run build --workspace backend",
     "test:backend": "npm run test --workspace backend",
     "db:up": "docker compose up -d postgres",
-    "db:down": "docker compose down"
+    "db:down": "docker compose down",
+    "db:migrate": "npm run db:migrate --workspace backend",
+    "db:seed": "npm run db:seed --workspace backend",
+    "db:studio": "npm run db:studio --workspace backend"
   }
 }

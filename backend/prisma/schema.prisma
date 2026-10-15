@@ -1,0 +1,662 @@
+// ExamFlow database schema
+// Location in project: backend/prisma/schema.prisma
+// Conventions: all timestamps are stored in UTC, primary keys are UUIDs
+// (except high-volume append-only tables, which use BigInt), and core
+// records use soft delete (deletedAt) instead of hard delete.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------
+// ENUMS
+// ---------------------------------------------------------------
+
+enum Role {
+  SUPER_ADMIN
+  INSTITUTION_ADMIN
+  INSTRUCTOR
+  PROCTOR
+  STUDENT
+}
+
+enum UserStatus {
+  PENDING_VERIFICATION
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+}
+
+enum EmailTokenType {
+  VERIFY_EMAIL
+  PASSWORD_RESET
+}
+
+enum QuestionType {
+  MCQ_SINGLE
+  MCQ_MULTIPLE
+  TRUE_FALSE
+  SHORT_ANSWER
+  ESSAY
+}
+
+enum Difficulty {
+  EASY
+  MEDIUM
+  HARD
+}
+
+enum ExamStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+enum ResultVisibility {
+  IMMEDIATE
+  AFTER_GRADING
+  AFTER_EXAM_CLOSES
+  MANUAL
+}
+
+enum AttemptStatus {
+  IN_PROGRESS
+  SUBMITTED
+  AUTO_SUBMITTED
+  GRADED
+  VOIDED
+}
+
+enum GradingStatus {
+  PENDING
+  AUTO_GRADED
+  MANUAL_GRADED
+}
+
+enum RegradeStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+}
+
+enum IntegrityEventType {
+  TAB_SWITCH
+  WINDOW_BLUR
+  FULLSCREEN_EXIT
+  COPY_ATTEMPT
+  PASTE_ATTEMPT
+  CONTEXT_MENU
+  IP_CHANGE
+  MULTIPLE_SESSION
+  WENT_OFFLINE
+  CAME_ONLINE
+}
+
+enum NotificationType {
+  EXAM_ASSIGNED
+  EXAM_REMINDER
+  RESULT_PUBLISHED
+  REGRADE_UPDATE
+  ATTEMPT_FLAGGED
+  SYSTEM
+}
+
+// ---------------------------------------------------------------
+// INSTITUTIONS AND USERS
+// ---------------------------------------------------------------
+
+model Institution {
+  id           String   @id @default(uuid()) @db.Uuid
+  name         String
+  slug         String   @unique
+  contactEmail String?
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  users     User[]
+  courses   Course[]
+  groups    Group[]
+  tags      Tag[]
+  questions Question[]
+  exams     Exam[]
+  settings  Setting[]
+  uploads   FileUpload[]
+  auditLogs AuditLog[]
+
+  @@map("institutions")
+}
+
+model User {
+  id               String     @id @default(uuid()) @db.Uuid
+  institutionId    String?    @db.Uuid // null only for SUPER_ADMIN
+  email            String     @unique // stored lowercase (enforced by CHECK)
+  passwordHash     String
+  firstName        String
+  lastName         String
+  role             Role
+  status           UserStatus @default(PENDING_VERIFICATION)
+  studentNumber    String?
+  phone            String?
+  emailVerifiedAt  DateTime?
+  lastLoginAt      DateTime?
+  failedLoginCount Int        @default(0)
+  lockedUntil      DateTime?
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
+  deletedAt        DateTime?
+
+  institution Institution? @relation(fields: [institutionId], references: [id], onDelete: Restrict)
+
+  refreshTokens       RefreshToken[]
+  emailTokens         EmailToken[]
+  taughtCourses       CourseInstructor[]
+  groupMemberships    GroupMember[]
+  questionsAuthored   Question[]         @relation("QuestionAuthor")
+  questionVersions    QuestionVersion[]
+  examsCreated        Exam[]             @relation("ExamCreator")
+  assignmentsReceived ExamAssignment[]   @relation("AssignmentStudent")
+  assignmentsMade     ExamAssignment[]   @relation("AssignmentAssigner")
+  attempts            Attempt[]
+  answersGraded       Answer[]           @relation("AnswerGrader")
+  regradesRequested   RegradeRequest[]   @relation("RegradeRequester")
+  regradesResolved    RegradeRequest[]   @relation("RegradeResolver")
+  notifications       Notification[]
+  auditLogs           AuditLog[]
+  uploads             FileUpload[]
+
+  @@unique([institutionId, studentNumber])
+  @@index([institutionId, role, status])
+  @@index([lastName, firstName])
+  @@index([deletedAt])
+  @@map("users")
+}
+
+model RefreshToken {
+  id         String    @id @default(uuid()) @db.Uuid
+  userId     String    @db.Uuid
+  familyId   String    @db.Uuid // all rotated tokens of one login share a family
+  tokenHash  String    @unique // SHA-256 of the token, never the raw token
+  userAgent  String?
+  ipAddress  String?
+  expiresAt  DateTime
+  revokedAt  DateTime?
+  lastUsedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([familyId])
+  @@index([expiresAt])
+  @@map("refresh_tokens")
+}
+
+model EmailToken {
+  id        String         @id @default(uuid()) @db.Uuid
+  userId    String         @db.Uuid
+  type      EmailTokenType
+  tokenHash String         @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime       @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, type])
+  @@index([expiresAt])
+  @@map("email_tokens")
+}
+
+// ---------------------------------------------------------------
+// COURSES AND GROUPS
+// ---------------------------------------------------------------
+
+model Course {
+  id            String    @id @default(uuid()) @db.Uuid
+  institutionId String    @db.Uuid
+  code          String
+  name          String
+  description   String?
+  isActive      Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  deletedAt     DateTime?
+
+  institution Institution        @relation(fields: [institutionId], references: [id], onDelete: Restrict)
+  instructors CourseInstructor[]
+  groups      Group[]
+  questions   Question[]
+  exams       Exam[]
+
+  @@unique([institutionId, code])
+  @@index([institutionId, isActive])
+  @@map("courses")
+}
+
+model CourseInstructor {
+  courseId   String   @db.Uuid
+  userId     String   @db.Uuid
+  assignedAt DateTime @default(now())
+
+  course Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([courseId, userId])
+  @@index([userId])
+  @@map("course_instructors")
+}
+
+model Group {
+  id            String    @id @default(uuid()) @db.Uuid
+  institutionId String    @db.Uuid
+  courseId      String?   @db.Uuid
+  name          String
+  academicYear  String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  deletedAt     DateTime?
+
+  institution Institution      @relation(fields: [institutionId], references: [id], onDelete: Restrict)
+  course      Course?          @relation(fields: [courseId], references: [id], onDelete: SetNull)
+  members     GroupMember[]
+  assignments ExamAssignment[]
+
+  @@unique([institutionId, name])
+  @@index([courseId])
+  @@map("groups")
+}
+
+model GroupMember {
+  groupId  String   @db.Uuid
+  userId   String   @db.Uuid
+  joinedAt DateTime @default(now())
+
+  group Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([groupId, userId])
+  @@index([userId])
+  @@map("group_members")
+}
+
+// ---------------------------------------------------------------
+// QUESTION BANK
+// A Question is a stable identity; its content lives in immutable
+// QuestionVersion rows. Exams and answers point at a specific version,
+// so editing a question never changes past exams or grades.
+// ---------------------------------------------------------------
+
+model Tag {
+  id            String   @id @default(uuid()) @db.Uuid
+  institutionId String   @db.Uuid
+  name          String
+  createdAt     DateTime @default(now())
+
+  institution Institution       @relation(fields: [institutionId], references: [id], onDelete: Cascade)
+  questions   QuestionTag[]
+  rules       ExamRandomRule[]
+
+  @@unique([institutionId, name])
+  @@map("tags")
+}
+
+model Question {
+  id            String       @id @default(uuid()) @db.Uuid
+  institutionId String       @db.Uuid
+  courseId      String?      @db.Uuid
+  authorId      String       @db.Uuid
+  type          QuestionType // immutable after creation
+  difficulty    Difficulty   @default(MEDIUM)
+  latestVersion Int          @default(1)
+  isArchived    Boolean      @default(false)
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+  deletedAt     DateTime?
+
+  institution Institution       @relation(fields: [institutionId], references: [id], onDelete: Restrict)
+  course      Course?           @relation(fields: [courseId], references: [id], onDelete: SetNull)
+  author      User              @relation("QuestionAuthor", fields: [authorId], references: [id], onDelete: Restrict)
+  versions    QuestionVersion[]
+  tags        QuestionTag[]
+
+  @@index([institutionId, type, difficulty])
+  @@index([courseId])
+  @@index([authorId])
+  @@index([institutionId, isArchived, deletedAt])
+  @@map("questions")
+}
+
+model QuestionVersion {
+  id          String   @id @default(uuid()) @db.Uuid
+  questionId  String   @db.Uuid
+  version     Int
+  body        String   @db.Text // sanitized rich text (HTML)
+  options     Json? // MCQ / true-false: [{ id, text }]
+  answerKey   Json? // MCQ: option ids; short answer: accepted answers
+  rubric      Json? // essay: [{ criterion, maxPoints }]
+  explanation String?  @db.Text
+  points      Decimal  @default(1) @db.Decimal(6, 2)
+  createdById String   @db.Uuid
+  createdAt   DateTime @default(now())
+
+  question  Question          @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  createdBy User              @relation(fields: [createdById], references: [id], onDelete: Restrict)
+  examUses  ExamQuestion[]
+  attempts  AttemptQuestion[]
+
+  @@unique([questionId, version])
+  @@map("question_versions")
+}
+
+model QuestionTag {
+  questionId String @db.Uuid
+  tagId      String @db.Uuid
+
+  question Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  tag      Tag      @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([questionId, tagId])
+  @@index([tagId])
+  @@map("question_tags")
+}
+
+// ---------------------------------------------------------------
+// EXAMS
+// ---------------------------------------------------------------
+
+model Exam {
+  id                   String           @id @default(uuid()) @db.Uuid
+  institutionId        String           @db.Uuid
+  courseId             String           @db.Uuid
+  createdById          String           @db.Uuid
+  title                String
+  description          String?
+  instructions         String?          @db.Text
+  status               ExamStatus       @default(DRAFT)
+  durationMinutes      Int
+  maxAttempts          Int              @default(1)
+  passMarkPercent      Decimal          @default(50) @db.Decimal(5, 2)
+  totalPoints          Decimal          @default(0) @db.Decimal(8, 2)
+  startsAt             DateTime
+  endsAt               DateTime
+  lateEntryMinutes     Int              @default(0)
+  shuffleQuestions     Boolean          @default(false)
+  shuffleOptions       Boolean          @default(false)
+  resultVisibility     ResultVisibility @default(AFTER_GRADING)
+  showCorrectAnswers   Boolean          @default(false)
+  enforceSingleSession Boolean          @default(true)
+  publishedAt          DateTime?
+  createdAt            DateTime         @default(now())
+  updatedAt            DateTime         @updatedAt
+  deletedAt            DateTime?
+
+  institution Institution       @relation(fields: [institutionId], references: [id], onDelete: Restrict)
+  course      Course            @relation(fields: [courseId], references: [id], onDelete: Restrict)
+  createdBy   User              @relation("ExamCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  questions   ExamQuestion[]
+  rules       ExamRandomRule[]
+  assignments ExamAssignment[]
+  attempts    Attempt[]
+
+  @@index([institutionId, status])
+  @@index([courseId])
+  @@index([createdById])
+  @@index([status, startsAt, endsAt])
+  @@map("exams")
+}
+
+// Manually chosen questions
+model ExamQuestion {
+  id                String   @id @default(uuid()) @db.Uuid
+  examId            String   @db.Uuid
+  questionVersionId String   @db.Uuid
+  position          Int
+  points            Decimal? @db.Decimal(6, 2) // overrides the version's points
+
+  exam            Exam            @relation(fields: [examId], references: [id], onDelete: Cascade)
+  questionVersion QuestionVersion @relation(fields: [questionVersionId], references: [id], onDelete: Restrict)
+
+  @@unique([examId, questionVersionId])
+  @@index([examId, position])
+  @@map("exam_questions")
+}
+
+// Random selection: "pick N questions with this tag / difficulty / type"
+model ExamRandomRule {
+  id         String        @id @default(uuid()) @db.Uuid
+  examId     String        @db.Uuid
+  tagId      String?       @db.Uuid
+  difficulty Difficulty?
+  type       QuestionType?
+  count      Int
+  pointsEach Decimal       @default(1) @db.Decimal(6, 2)
+
+  exam Exam @relation(fields: [examId], references: [id], onDelete: Cascade)
+  tag  Tag? @relation(fields: [tagId], references: [id], onDelete: SetNull)
+
+  @@index([examId])
+  @@map("exam_random_rules")
+}
+
+// Assigned to a whole group OR a single student (exactly one is set; CHECK)
+model ExamAssignment {
+  id           String   @id @default(uuid()) @db.Uuid
+  examId       String   @db.Uuid
+  groupId      String?  @db.Uuid
+  userId       String?  @db.Uuid
+  assignedById String   @db.Uuid
+  createdAt    DateTime @default(now())
+
+  exam       Exam   @relation(fields: [examId], references: [id], onDelete: Cascade)
+  group      Group? @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  student    User?  @relation("AssignmentStudent", fields: [userId], references: [id], onDelete: Cascade)
+  assignedBy User   @relation("AssignmentAssigner", fields: [assignedById], references: [id], onDelete: Restrict)
+
+  @@unique([examId, groupId])
+  @@unique([examId, userId])
+  @@index([groupId])
+  @@index([userId])
+  @@map("exam_assignments")
+}
+
+// ---------------------------------------------------------------
+// ATTEMPTS, ANSWERS, GRADING
+// ---------------------------------------------------------------
+
+model Attempt {
+  id                  String        @id @default(uuid()) @db.Uuid
+  examId              String        @db.Uuid
+  studentId           String        @db.Uuid
+  attemptNumber       Int           @default(1)
+  status              AttemptStatus @default(IN_PROGRESS)
+  startedAt           DateTime      @default(now())
+  expiresAt           DateTime // server-computed deadline: authoritative timer
+  submittedAt         DateTime?
+  lastSeenAt          DateTime?
+  sessionFamilyId     String?       @db.Uuid // login session allowed to continue this attempt
+  ipAddress           String?
+  userAgent           String?
+  needsManualGrading  Boolean       @default(false)
+  score               Decimal?      @db.Decimal(8, 2)
+  maxScore            Decimal?      @db.Decimal(8, 2)
+  percentage          Decimal?      @db.Decimal(5, 2)
+  passed              Boolean?
+  gradedAt            DateTime?
+  resultReleasedAt    DateTime?
+
+  exam            Exam              @relation(fields: [examId], references: [id], onDelete: Restrict)
+  student         User              @relation(fields: [studentId], references: [id], onDelete: Restrict)
+  questions       AttemptQuestion[]
+  answers         Answer[]
+  integrityEvents IntegrityEvent[]
+
+  @@unique([examId, studentId, attemptNumber])
+  @@index([examId, status])
+  @@index([studentId, status])
+  @@index([status, expiresAt]) // auto-submit job
+  @@map("attempts")
+}
+
+// Frozen snapshot of what this student was served (order, option order, points)
+model AttemptQuestion {
+  id                String  @id @default(uuid()) @db.Uuid
+  attemptId         String  @db.Uuid
+  questionVersionId String  @db.Uuid
+  position          Int
+  points            Decimal @db.Decimal(6, 2)
+  optionOrder       Json?
+
+  attempt         Attempt         @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+  questionVersion QuestionVersion @relation(fields: [questionVersionId], references: [id], onDelete: Restrict)
+  answer          Answer?
+
+  @@unique([attemptId, questionVersionId])
+  @@index([attemptId, position])
+  @@map("attempt_questions")
+}
+
+model Answer {
+  id                String        @id @default(uuid()) @db.Uuid
+  attemptQuestionId String        @unique @db.Uuid
+  attemptId         String        @db.Uuid // denormalized for fast per-attempt queries
+  response          Json?
+  flagged           Boolean       @default(false)
+  revision          Int           @default(1) // ignores out-of-order autosaves
+  answeredAt        DateTime      @default(now())
+  gradingStatus     GradingStatus @default(PENDING)
+  isCorrect         Boolean?
+  score             Decimal?      @db.Decimal(6, 2)
+  feedback          String?       @db.Text
+  rubricScores      Json?
+  gradedById        String?       @db.Uuid
+  gradedAt          DateTime?
+
+  attemptQuestion AttemptQuestion  @relation(fields: [attemptQuestionId], references: [id], onDelete: Cascade)
+  attempt         Attempt          @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+  gradedBy        User?            @relation("AnswerGrader", fields: [gradedById], references: [id], onDelete: SetNull)
+  regradeRequests RegradeRequest[]
+
+  @@index([attemptId])
+  @@index([gradingStatus])
+  @@index([gradedById])
+  @@map("answers")
+}
+
+model RegradeRequest {
+  id             String        @id @default(uuid()) @db.Uuid
+  answerId       String        @db.Uuid
+  requestedById  String        @db.Uuid
+  reason         String        @db.Text
+  status         RegradeStatus @default(PENDING)
+  resolvedById   String?       @db.Uuid
+  resolutionNote String?       @db.Text
+  previousScore  Decimal?      @db.Decimal(6, 2)
+  newScore       Decimal?      @db.Decimal(6, 2)
+  createdAt      DateTime      @default(now())
+  resolvedAt     DateTime?
+
+  answer      Answer @relation(fields: [answerId], references: [id], onDelete: Cascade)
+  requestedBy User   @relation("RegradeRequester", fields: [requestedById], references: [id], onDelete: Restrict)
+  resolvedBy  User?  @relation("RegradeResolver", fields: [resolvedById], references: [id], onDelete: SetNull)
+
+  @@index([status, createdAt])
+  @@index([answerId])
+  @@index([requestedById])
+  @@map("regrade_requests")
+}
+
+// ---------------------------------------------------------------
+// INTEGRITY, NOTIFICATIONS, AUDIT, SETTINGS, FILES
+// ---------------------------------------------------------------
+
+model IntegrityEvent {
+  id         BigInt             @id @default(autoincrement())
+  attemptId  String             @db.Uuid
+  type       IntegrityEventType
+  metadata   Json?
+  ipAddress  String?
+  occurredAt DateTime           @default(now())
+
+  attempt Attempt @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+
+  @@index([attemptId, occurredAt])
+  @@index([type])
+  @@map("integrity_events")
+}
+
+model Notification {
+  id        String           @id @default(uuid()) @db.Uuid
+  userId    String           @db.Uuid
+  type      NotificationType
+  title     String
+  body      String
+  data      Json?
+  readAt    DateTime?
+  createdAt DateTime         @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, readAt, createdAt])
+  @@map("notifications")
+}
+
+// Append-only: UPDATE and DELETE are blocked by a trigger (see constraints SQL)
+model AuditLog {
+  id            BigInt   @id @default(autoincrement())
+  actorId       String?  @db.Uuid
+  institutionId String?  @db.Uuid
+  action        String // e.g. "exam.publish", "user.deactivate"
+  entityType    String
+  entityId      String?
+  metadata      Json?
+  ipAddress     String?
+  userAgent     String?
+  createdAt     DateTime @default(now())
+
+  actor       User?        @relation(fields: [actorId], references: [id], onDelete: SetNull)
+  institution Institution? @relation(fields: [institutionId], references: [id], onDelete: SetNull)
+
+  @@index([institutionId, createdAt])
+  @@index([actorId, createdAt])
+  @@index([entityType, entityId])
+  @@index([action])
+  @@map("audit_logs")
+}
+
+model Setting {
+  id            String   @id @default(uuid()) @db.Uuid
+  institutionId String   @db.Uuid
+  key           String
+  value         Json
+  updatedAt     DateTime @updatedAt
+
+  institution Institution @relation(fields: [institutionId], references: [id], onDelete: Cascade)
+
+  @@unique([institutionId, key])
+  @@map("settings")
+}
+
+model FileUpload {
+  id            String   @id @default(uuid()) @db.Uuid
+  institutionId String   @db.Uuid
+  ownerId       String   @db.Uuid
+  originalName  String
+  storageKey    String   @unique
+  mimeType      String
+  sizeBytes     Int
+  sha256        String
+  createdAt     DateTime @default(now())
+
+  institution Institution @relation(fields: [institutionId], references: [id], onDelete: Restrict)
+  owner       User        @relation(fields: [ownerId], references: [id], onDelete: Restrict)
+
+  @@index([institutionId])
+  @@index([ownerId])
+  @@map("file_uploads")
+}

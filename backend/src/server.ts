@@ -2,6 +2,7 @@ import http from 'http';
 import { createApp } from './app';
 import { env } from './config/env';
 import { logger } from './config/logger';
+import { prisma } from './lib/prisma';
 
 const app = createApp();
 const server = http.createServer(app);
@@ -12,15 +13,20 @@ server.listen(env.PORT, () => {
 
 function shutdown(signal: string) {
   logger.info(`${signal} received, shutting down gracefully`);
-  server.close((error) => {
-    if (error) {
-      logger.error({ err: error }, 'Error while closing the server');
-      process.exit(1);
-    }
-    process.exit(0);
-  });
   // Force exit if connections do not close in time.
   setTimeout(() => process.exit(1), 10_000).unref();
+
+  server.close(async (error) => {
+    if (error) {
+      logger.error({ err: error }, 'Error while closing the server');
+    }
+    try {
+      await prisma.$disconnect();
+    } catch (disconnectError) {
+      logger.error({ err: disconnectError }, 'Error while closing the database connection');
+    }
+    process.exit(error ? 1 : 0);
+  });
 }
 
 process.on('SIGTERM', () => shutdown('SIGTERM'));
