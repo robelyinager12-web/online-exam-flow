@@ -19,4 +19,9 @@ export const requestLogger = pinoHttp({
     return 'info';
   },
   autoLogging: { ignore: (req) => req.url === '/api/v1/health' },
+  // Keep logs short: the default serializers print every header of every request.
+  serializers: {
+    req: (req) => ({ id: req.id, method: req.method, url: req.url }),
+    res: (res) => ({ statusCode: res.statusCode }),
+  },
 });
