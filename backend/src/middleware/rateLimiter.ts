@@ -19,9 +19,15 @@ export const apiLimiter = createLimiter({
   limit: rateLimitConfig.api.max,
 });
 
-// Used by login, register and password reset routes (added in the auth step).
+// Login, refresh, verify and reset: only failed requests count.
 export const authLimiter = createLimiter({
   windowMs: rateLimitConfig.auth.windowMs,
   limit: rateLimitConfig.auth.max,
   skipSuccessfulRequests: true,
+});
+
+// Register, forgot password, resend verification: these "succeed" by design, so all requests count.
+export const accountActionLimiter = createLimiter({
+  windowMs: rateLimitConfig.accountActions.windowMs,
+  limit: rateLimitConfig.accountActions.max,
 });

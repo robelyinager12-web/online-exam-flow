@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { AppError } from '../lib/appError';
 import { asyncHandler } from '../lib/asyncHandler';
 import { prisma } from '../lib/prisma';
+import { authRouter } from '../modules/auth/auth.routes';
 
 export const apiRouter = Router();
 
@@ -33,5 +34,5 @@ apiRouter.get(
   }),
 );
 
-// Feature routers are mounted here as each module is built:
-// apiRouter.use('/auth', authRouter);
+// Feature routers
+apiRouter.use('/auth', authRouter);
