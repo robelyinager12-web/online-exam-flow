@@ -1,0 +1,15 @@
+{
+  "name": "examflow",
+  "version": "0.1.0",
+  "private": true,
+  "description": "ExamFlow - online exam platform",
+  "workspaces": ["backend"],
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "dev:backend": "npm run dev --workspace backend",
+    "build:backend": "npm run build --workspace backend",
+    "test:backend": "npm run test --workspace backend",
+    "db:up": "docker compose up -d postgres",
+    "db:down": "docker compose down"
+  }
+}
