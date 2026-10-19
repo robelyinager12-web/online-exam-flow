@@ -318,8 +318,7 @@ export async function forgotPassword(email: string): Promise<void> {
       ...resetPasswordEmail({ firstName: user.firstName, url: buildAppLink('/reset-password', token) }),
     });
   }
-}
-
+} 
 export async function resetPassword(rawToken: string, newPassword: string, ctx: RequestContext): Promise<void> {
   const record = await prisma.emailToken.findUnique({ where: { tokenHash: hashToken(rawToken) } });
   const now = new Date();
@@ -340,6 +339,17 @@ export async function resetPassword(rawToken: string, newPassword: string, ctx: 
       where: { id: record.userId },
       data: { passwordHash, failedLoginCount: 0, lockedUntil: null },
     });
+        // Following an emailed link proves the person owns the address, so an invited
+    // (pending) account becomes active when its owner sets the first password.
+    await tx.user.updateMany({
+      where: { id: record.userId, emailVerifiedAt: null },
+      data: { emailVerifiedAt: now },
+    });
+    await tx.user.updateMany({
+      where: { id: record.userId, status: 'PENDING_VERIFICATION' },
+      data: { status: 'ACTIVE' },
+    });
+    
     // Everyone signed in with the old password is signed out.
     await tx.refreshToken.updateMany({
       where: { userId: record.userId, revokedAt: null },

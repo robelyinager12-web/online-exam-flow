@@ -4,6 +4,7 @@ import { accountActionLimiter, authLimiter } from '../../middleware/rateLimiter'
 import { validate } from '../../middleware/validate';
 import * as controller from './auth.controller';
 import {
+  changePasswordSchema,
   forgotPasswordSchema,
   loginSchema,
   registerSchema,
@@ -19,6 +20,13 @@ authRouter.post('/login', authLimiter, validate({ body: loginSchema }), controll
 authRouter.post('/refresh', authLimiter, controller.refresh);
 authRouter.post('/logout', controller.logout);
 authRouter.get('/me', authenticate, controller.me);
+authRouter.post(
+  '/change-password',
+  authenticate,
+  authLimiter,
+  validate({ body: changePasswordSchema }),
+  controller.changePassword,
+);
 
 authRouter.post('/verify-email', authLimiter, validate({ body: verifyEmailSchema }), controller.verifyEmail);
 authRouter.post(

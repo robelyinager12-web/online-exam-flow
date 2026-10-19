@@ -3,6 +3,7 @@ import { authConfig } from '../../config/auth';
 import { env, isProduction } from '../../config/env';
 import { AppError } from '../../lib/appError';
 import { asyncHandler } from '../../lib/asyncHandler';
+import { changePassword as applyPasswordChange } from './auth.password';
 import * as authService from './auth.service';
 import type { RequestContext } from './auth.sessions';
 
@@ -106,4 +107,20 @@ export const forgotPassword = asyncHandler(async (req, res) => {
 export const resetPassword = asyncHandler(async (req, res) => {
   await authService.resetPassword(req.body.token, req.body.password, context(req));
   res.status(200).json(message('Password updated. Please sign in with your new password.'));
+});
+
+export const changePassword = asyncHandler(async (req, res) => {
+  if (!req.user) {
+    throw AppError.unauthorized();
+  }
+  await applyPasswordChange(
+    {
+      userId: req.user.id,
+      sessionId: req.user.sessionId,
+      currentPassword: req.body.currentPassword,
+      newPassword: req.body.newPassword,
+    },
+    context(req),
+  );
+  res.status(200).json(message('Password changed. Your other devices have been signed out.'));
 });

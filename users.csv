@@ -1,0 +1,4 @@
+email,firstName,lastName,role,studentNumber
+abel@demo.example,Abel,Tesfaye,STUDENT,S-1001
+sara@demo.example,Sara,Bekele,STUDENT,S-1002
+bad-email,Nobody,Here,STUDENT,

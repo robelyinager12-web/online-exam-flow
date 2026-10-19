@@ -3,6 +3,7 @@ import { AppError } from '../lib/appError';
 import { asyncHandler } from '../lib/asyncHandler';
 import { prisma } from '../lib/prisma';
 import { authRouter } from '../modules/auth/auth.routes';
+import { usersRouter } from '../modules/users/users.routes';
 
 export const apiRouter = Router();
 
@@ -36,3 +37,4 @@ apiRouter.get(
 
 // Feature routers
 apiRouter.use('/auth', authRouter);
+apiRouter.use('/users', usersRouter);
