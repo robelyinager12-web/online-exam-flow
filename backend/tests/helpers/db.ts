@@ -5,7 +5,16 @@ import { sendMailInBackground } from '../../src/lib/mailer';
 
 // Clears everything the previous test configured on the mocked database.
 export function resetMockDb(): void {
-  const models = [prisma.user, prisma.institution, prisma.refreshToken, prisma.emailToken, prisma.auditLog];
+  const models = [
+    prisma.user,
+    prisma.institution,
+    prisma.refreshToken,
+    prisma.emailToken,
+    prisma.auditLog,
+    prisma.setting,
+    prisma.course,
+    prisma.courseInstructor,
+  ];
   for (const model of models) {
     for (const fn of Object.values(model)) {
       (fn as Mock).mockReset();

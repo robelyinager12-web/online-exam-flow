@@ -18,8 +18,10 @@ vi.mock('../src/lib/prisma', () => {
     findFirst: vi.fn(),
     findMany: vi.fn(),
     create: vi.fn(),
+    createMany: vi.fn(),
     update: vi.fn(),
     updateMany: vi.fn(),
+    upsert: vi.fn(),
     delete: vi.fn(),
     deleteMany: vi.fn(),
     count: vi.fn(),
@@ -34,6 +36,9 @@ vi.mock('../src/lib/prisma', () => {
     refreshToken: model(),
     emailToken: model(),
     auditLog: model(),
+    setting: model(),
+    course: model(),
+    courseInstructor: model(),
   };
 
   // Supports both forms: $transaction([...promises]) and $transaction(async (tx) => ...)

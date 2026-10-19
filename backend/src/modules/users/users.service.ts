@@ -45,7 +45,7 @@ const isUniqueViolation = (error: unknown): boolean =>
 
 // Invited users get a password nobody knows. It is not a valid hash, so no login can ever match it.
 // They choose their own password through the emailed link.
-const unusablePassword = (): string => `!${generateToken()}`;
+export const unusablePassword = (): string => `!${generateToken()}`;
 
 // ---------------------------------------------------------------- actor
 
@@ -151,7 +151,7 @@ async function assertStudentNumberFree(institutionId: string | null, studentNumb
 }
 
 // Sends the "set your password" link. Returns false when an invitation was sent a moment ago.
-async function sendInvite(
+export async function sendInvite(
   user: { id: string; email: string; firstName: string },
   institutionName: string | null,
 ): Promise<boolean> {
