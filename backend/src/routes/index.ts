@@ -4,7 +4,9 @@ import { asyncHandler } from '../lib/asyncHandler';
 import { prisma } from '../lib/prisma';
 import { authRouter } from '../modules/auth/auth.routes';
 import { coursesRouter } from '../modules/courses/courses.routes';
+import { groupsRouter } from '../modules/groups/groups.routes';
 import { institutionsRouter } from '../modules/institutions/institutions.routes';
+import { meRouter } from '../modules/me/me.routes';
 import { usersRouter } from '../modules/users/users.routes';
 
 export const apiRouter = Router();
@@ -42,3 +44,5 @@ apiRouter.use('/auth', authRouter);
 apiRouter.use('/users', usersRouter);
 apiRouter.use('/institutions', institutionsRouter);
 apiRouter.use('/courses', coursesRouter);
+apiRouter.use('/groups', groupsRouter);
+apiRouter.use('/me', meRouter);
