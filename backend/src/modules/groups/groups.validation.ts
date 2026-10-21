@@ -65,6 +65,6 @@ export const addMembersSchema = z
 
 export type CreateGroupInput = z.infer<typeof createGroupSchema>;
 export type UpdateGroupInput = z.infer<typeof updateGroupSchema>;
-export type ListGroupsQuery = z.infer<typeof listGroupsQuerySchema>;e
+export type ListGroupsQuery = z.infer<typeof listGroupsQuerySchema>;
 export type ListMembersQuery = z.infer<typeof listMembersQuerySchema>;
 export type AddMembersInput = z.infer<typeof addMembersSchema>;

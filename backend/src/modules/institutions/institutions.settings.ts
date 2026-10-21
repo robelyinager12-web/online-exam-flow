@@ -46,7 +46,7 @@ export type UpdateSettingsInput = z.infer<typeof updateSettingsSchema>;
 export function mergeSettings(rows: { key: string; value: unknown }[]): Settings {
   const merged: Record<string, unknown> = { ...SETTING_DEFAULTS };
   for (const row of rows) {
-    if (row.key in settingFields) {
+    if (Object.prototype.hasOwnProperty.call(settingFields, row.key)) {
       const parsed = settingFields[row.key as SettingKey].safeParse(row.value);
       if (parsed.success) {
         merged[row.key] = parsed.data;

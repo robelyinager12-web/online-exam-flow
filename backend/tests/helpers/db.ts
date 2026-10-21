@@ -16,6 +16,10 @@ export function resetMockDb(): void {
     prisma.courseInstructor,
     prisma.group,
     prisma.groupMember,
+    prisma.question,
+    prisma.questionVersion,
+    prisma.tag,
+    prisma.questionTag,
   ];
   for (const model of models) {
     for (const fn of Object.values(model)) {

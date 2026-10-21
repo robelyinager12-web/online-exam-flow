@@ -41,6 +41,10 @@ vi.mock('../src/lib/prisma', () => {
     courseInstructor: model(),
     group: model(),
     groupMember: model(),
+    question: model(),
+    questionVersion: model(),
+    tag: model(),
+    questionTag: model(),
   };
 
   // Supports both forms: $transaction([...promises]) and $transaction(async (tx) => ...)

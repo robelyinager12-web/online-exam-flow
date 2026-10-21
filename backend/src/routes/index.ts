@@ -7,6 +7,7 @@ import { coursesRouter } from '../modules/courses/courses.routes';
 import { groupsRouter } from '../modules/groups/groups.routes';
 import { institutionsRouter } from '../modules/institutions/institutions.routes';
 import { meRouter } from '../modules/me/me.routes';
+import { questionsRouter } from '../modules/questions/questions.routes';
 import { usersRouter } from '../modules/users/users.routes';
 
 export const apiRouter = Router();
@@ -46,3 +47,4 @@ apiRouter.use('/institutions', institutionsRouter);
 apiRouter.use('/courses', coursesRouter);
 apiRouter.use('/groups', groupsRouter);
 apiRouter.use('/me', meRouter);
+apiRouter.use('/questions', questionsRouter);

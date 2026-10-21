@@ -300,6 +300,7 @@ describe('institution settings', () => {
       { key: 'timezone', value: 'Africa/Addis_Ababa' },
       { key: 'defaultPassMarkPercent', value: 'not-a-number' }, // broken stored value is ignored
       { key: 'somethingOld', value: 1 }, // unknown key is ignored
+      { key: 'toString', value: 1 }, // inherited object properties are not settings
     ] as never);
 
     const res = await getSettings(instA, adminCookie);
